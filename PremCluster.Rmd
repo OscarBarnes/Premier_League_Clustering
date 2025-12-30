@@ -1,0 +1,653 @@
+---
+title: "The Big Six or the Big One? Defining the True Hierarchy of the Premier League through Financial and Sporting Metrics"
+author: "Oscar Barnes"
+output: 
+  pdf_document:
+    toc: true
+bibliography: references.bib
+link-citations: true
+---
+
+```{r setup, include = FALSE}
+library(knitr)
+library(rio)
+library(tidyverse)
+library(corrplot)
+library(factoextra)
+library(psych)
+library(forcats)
+knitr::opts_chunk$set(
+  echo = FALSE,
+  fig.align = "center",
+  out.width = "60%",
+  message = FALSE,
+  warning = FALSE)
+```
+
+\newpage
+
+# Introduction: The Quantitative Anatomy of the Elite
+
+The term ‘Big Six’ is the latest iteration of a shifting power structure that has evolved alongside the Premier League’s commercial growth. This informal designation—comprising Arsenal, Chelsea, Liverpool, Manchester City, Manchester United, and Tottenham Hotspur—superseded previous eras of concentration, including the 1980s "Big Five," the late-90s "Big Two" duopoly of Arsenal and Manchester United, and the mid-2000s "Big Four." Since 2004, these six clubs have typically accounted for over half of the league's total annual revenue. Their sporting dominance is equally stark; since the league's inception in 1992, a "Big Six" member has won the title in all but two seasons (1994/95 and 2015/16) [@wiki_bigsix].
+
+Despite this historical permanence, the "Big Six" hierarchy now faces unprecedented pressure from massive external investment (e.g. Newcastle United) and the rising sporting efficiency of ambitious challengers like Brighton and Aston Villa. This report moves beyond media-driven narratives by employing multivariate statistical techniques, **Principal Component Analysis (PCA)** [@jolliffe2002] and **K-Means Clustering** [@macqueen1967], to objectively map the Premier League’s structure. By analysing 11 variables across **Sporting Output**, **Financial Scale**, and **Market Reach** over a five-year window, I quantify the precise statistical distance between the elite and their challengers to determine if the "Big Six" remains a closed shop.
+
+## Aims and Objectives
+
+The primary objective of this project is to use **Principal Component Analysis (PCA)** and **K-Means Clustering** to identify and profile the underlying structure of the Premier League, thereby establishing a new, data-driven hierarchy. Specifically, this analysis aims to:
+\begin{enumerate}
+ \item \textbf{Dimension Reduction (PCA):} Uncover and name the \textbf{three core, uncorrelated pillars} (Absolute Scale, Competitive Stability, and Infrastructure/Pedigree) that collectively explain over 92\% of the variance observed across the 11 club metrics.
+ \item \textbf{Cluster Validation:} Statistically test the hypothesis of the traditional 'Big Six' by determining if they truly occupy a unique, isolated statistical cluster.
+ \item \textbf{Hierarchy Definition (K-Means):} Determine the optimal grouping of clubs ($\mathbf{k=4}$ clusters) to establish a clear stratification of the league, moving from the elite powerhouses to the "Yo-Yo" tier.
+ \item \textbf{Challenger Identification (The Vanguard):} Identify the specific clubs (the "Vanguard") that the model naturally separates from the middle-tier, positioning them as the most likely disruptors of the established order.
+ \item \textbf{Proximity Audit:} Conduct a high-resolution distance analysis to quantify the mathematical "gap" between the Elite center and the chasing pack, determining how close the Vanguard actually is to breaking the glass ceiling.
+\end{enumerate}
+By successfully executing these aims, this report provides a quantitative anatomy of the Premier League, detailing the measurable **Financial Chasm** that separates the top tier from the rest and highlighting the cost of maintaining elite status.
+
+## Report Roadmap
+
+The remainder of this report proceeds as follows: the **Data** section details the variables used; the **Methodology** section walks through the standardisation process and the application of PCA and Hierarchical Clustering; the **Results** section presents the outcome of the primary analysis, including the **Component Loadings**, the final **Cluster Profiles**, the **Spatial Biplot**. The report concludes with the **Challenger Audit**, which measures the statistical proximity of Tier 2 clubs to the Elite cluster, and a discussion on the implications of the identified structure.
+
+\newpage
+
+# Data: Defining the Variables and Scopes of Competitive Success
+
+```{r load}
+variables <- import("VarDescription.xlsx")
+data_raw <- import("PremCluster.xlsx")
+data_raw <- data_raw %>%
+  column_to_rownames(var = "Team")
+
+sporting <- variables[c(1:5), ]
+financial <- variables[c(6:9), ]
+engagement <- variables[c(10:11), ]
+```
+
+The analysis is primarily based on a structured dataset comprising 27 current and recent Premier League clubs. This dataset was compiled from authoritative financial accounts (e.g. club annual reports, publicly available data from **[@swissramble2024]**, comprehensive sporting statistics **[@fotmob2025]/[@uefa2025]** spanning the five seasons leading up to and including the 2024/25 season (financial data was collected from the 2023/24 season) as well as **Wikipedia** [@wiki_stadiums] and **Instagram** [@instagram2025] for stadium capacity and followers respectively.
+
+Each club serves as a single observation, and the data includes 11 key quantitative variables chosen to encapsulate the fundamental drivers of club success across three distinct domains:
+  
+## Variable Domains
+  
+### 1. Sporting Output and Efficiency
+  
+These variables measure the club’s on-pitch performance, tactical style, and historical European pedigree.
+
+```{r sporting variables}
+kable(remove_rownames(sporting),
+      caption = "Sporting Output and Efficiency Variables",
+      align = "c")
+```
+
+### 2. Financial and Market Scale
+
+These variables quantify the absolute economic and global size of the club. All financial figures represent the most recently available accounting period for consistent comparison.
+
+```{r financial variables}
+kable(remove_rownames(financial),
+      caption = "Financial and Market Scale Variables",
+      align = "c")
+```
+
+### 3. Fan engagement
+
+These variables provide context on the club’s physical assets and digital brand footprint.
+
+```{r engagement variables}
+kable(remove_rownames(engagement),
+      caption = "Fan Engagement Variables",
+      align = "c")
+```
+
+## Rationale: The Pillars of Dominance
+
+The selection of these 11 variables is predicated on the "Cycle of Elite Status" within modern football. In the Premier League’s current climate, sporting success is rarely an isolated event;it is the result of a feedback loop between Financial Scale, Infrastructure, and On-Pitch Dominance.
+\begin{itemize}
+\item \textbf{From Scale to Success:} High Commercial and Total Revenues (Financial Scale) allow for the acquisition of elite talent (\textbf{Squad Market Value}) and the payment of competitive salaries (\textbf{Wage Bill}).
+\item \textbf{From Success to Dominance:} Sustained on-pitch performance (\textbf{Average Points, Expected Goal Difference}) leads to European pedigree (\textbf{UEFA Coefficient}), which secures global attention (\textbf{Instagram Followers}) and justifies massive physical assets (\textbf{Stadium Capacity}).
+\end{itemize}
+Ultimately, this cycle creates a **"Financial moat"** around the established elite. Because the data shows a near-perfect correlation between financial input and sporting output, the model can now clearly identify which clubs have truly crossed the threshold into permanent elite status and which are still struggling to build a sustainable moat.
+
+## Data Preparation
+
+Prior to analysis, the raw data required a critical preprocessing step. All 11 quantitative variables were subjected to **Standardisation (Z-score transformation)**. This ensures that variables with large magnitudes (e.g. Revenue in the hundreds of millions) do not artificially dominate the PCA and clustering results over variables with smaller scales (e.g. average points).
+
+## Analytical Scopes: Sensitivity and Robustness
+
+The analysis is conducted across a \textbf{Full League Scope}, incorporating all 27 clubs that have competed in the Premier League within the five-year window. This comprehensive approach is designed to:
+  \begin{enumerate}
+\item \textbf{Establish a Baseline:} To identify the primary "Financial Chasm" between the established global brands and the rest of the domestic competition.
+\item \textbf{Ensure Resolution:} By including a wide spectrum of clubs—from perennial title contenders to recently promoted sides—the model is able to distinguish between different tiers of stability.
+\item \textbf{Identify the Vanguard:} This scope allows the clustering algorithm to naturally separate "Vanguard" challengers (clubs with high-growth financial and sporting trajectories) from the "Established Middle", providing a high-resolution map of the league’s shifting power dynamics.
+\end{enumerate}
+By analysing the full dataset simultaneously, the report ensures that the identified tiers are mathematically stable and reflect the organic, multi-layered structure of the modern Premier League.
+
+\newpage
+
+# Methodology: From Raw Data to Competitive Tiers
+
+The analytical procedure was executed in a three-stage process to transform 11 complex variables into a clear, multidimensional map of the Premier League.
+
+## 1. Data Standardisation and Multicollinearity Check
+
+Prior to any analysis, the data was prepared to ensure mathematical parity across all variables.
+
+### 1.1 Z-Score Transformation (Standardisation)
+
+The initial dataset contained variables measured on vastly different scales. To prevent variables with the largest magnitudes from "bullying" the model and artificially dominating the results, all 11 variables were subjected to Z-score transformation. This centers the data by subtracting the mean and scaling by the standard deviation:
+$$Z_i = \frac{X_i - \mu_X}{\sigma_X}$$
+This places every club on the same "yardstick", where a score of 0 represents the league average, and positive or negative numbers represent how far they sit above or below that average.
+
+### 1.2 Multicollinearity Assessment
+
+In football, many metrics are redundant; for instance, a club with high revenue almost always has high wages. I generated a **Correlation Matrix** to identify these overlapping relationships. The high degree of correlation between financial inputs and sporting outputs (often exceeding $r = 0.90$) justifies the use of PCA to boil the data down into its most essential, unique factors.
+
+## 2. Dimension Reduction: Principal Component Analysis (PCA)
+
+PCA was employed to transform the 11 original variables into 3 uncorrelated, composite variables known as **Principal Components (PCs)**. This reduces the complexity of the data while keeping the "big picture" intact.
+\begin{itemize}
+  \item \textbf{PCA Execution and Selection:} To determine the optimal number of components, I employed a dual-criteria approach. First, I utilised the 'Scree Plot Test' to visually inspect for an 'elbow', the point where diminishing returns set in. However, to ensure the model captured the full complexity of the league, I also applied the 90\% rule-of-thumb (keep the PCs that retain 90\% of the total variance). Consequently, I chose to retain three components (PC1 to PC3), which together explain 92.3\% of the total variance. In statistics, variance represents the total amount of 'information'; ensuring we cross the 90\% threshold guarantees a nearly complete picture of what differentiates these clubs, rather than relying solely on the most dominant factor.".
+  \item \textbf{Component Interpretation and Rotation:} The components were subjected to "orthogonal rotation" (Varimax). This is essentially a mathematical sharpening tool that ensures each variable clearly belongs to only one factor. This allowed us to assign clear, real-world labels to the components: \textbf{Absolute Scale} (PC1), \textbf{Competitive Stability} (PC2), \textbf{Infrastructure \& Pedigree} (PC3).
+\end{itemize}
+
+\newpage
+
+## 3. Cluster Validation and K-Means Implementation
+
+The final phase involved identifying the natural "tribes" within the league using a combination of hierarchical and partitioning clustering.
+
+### 3.1 Hierarchical Clustering (The Exploratory Phase)
+
+I first used Hierarchical Clustering [@sneath1973] to visualise the natural groupings. This produces a Dendrogram—a "family tree" of the league. Using Ward’s Minimum Variance Method, the clusters are ensured to be compact and clearly separated. This provided the visual evidence that the league naturally divides into four distinct competitive tiers.
+
+### 3.2 K-Means Clustering (The Definitive Phase)
+
+K-Means was used to assign each club to its final, definitive cluster ($k=4$). The algorithm places a “center point” (centroid) for each group and assigns clubs to the one they are closest to. To ensure the results were mathematically stable, the process was run with 25 random starts ($nstart=25$). To determine the most appropriate number of clusters ($k$), the Elbow Method was utilised [@kaufman1990]. By plotting the Total Within-Cluster Sum of Squares (WSS) against the number of clusters, the 'elbow' point is identified where the marginal gain in variance explanation begins to plateau.
+
+## 4. Proximity Audit and The “Chasm”
+
+The final step involved interpreting the results to define the actual distance between the clusters:
+\begin{itemize}
+  \item \textbf{Cluster Profiling:} I calculated the average stats for each group (e.g. "The average Tier 1 club has £600m in revenue compared to £189m in Tier 2") to define the "character" of each tier.
+  \item \textbf{Euclidean Distance:} I calculated the mathematical "straight-line distance" from the mathematical center (Centroid) of the Elite cluster to every other team. This provides a hard, objective number to describe the "Financial Chasm"—quantifying exactly how far a "Vanguard" club like Aston Villa or Newcastle remains from the established "Big Six."
+\end{itemize}
+
+All data processing, dimensionality reduction, and clustering were performed using the R statistical programming language [@r_core_2024]. Visualisations were generated using ggplot2 (from tidyverse), corrplot and factoextra packages to ensure high-fidelity spatial mapping of the results. Many other packages (knitr, rio, psych, forcats) were used to tidy, manipulate and structure data.
+
+\newpage
+
+# Results and Analysis
+
+## 1. Initial Data Diagnostics and Preparation
+
+This section validates the structure of the dataset and provides the quantitative justification for using **dimension reduction (PCA)** to simplify the complex relationships between the 11 variables.
+
+### 1.1 Standardised Data Structure
+
+The analysis began by applying a Z-score transformation to all 11 quantitative variables. This process "levels the playing field" by ensuring every variable is measured on a uniform scale with a **mean ($\mu$) of 0** and a **standard deviation ($\sigma$) of 1**.
+
+As shown in the sample below, elite clubs like **Arsenal** sit significantly above average in every category, while clubs in lower tiers, such as **Burnley**, sit consistently below. Without this step, variables with large numerical ranges (like Revenue in millions) would "bully" the model, drowning out smaller but equally important metrics (like Points per Game).
+
+```{r standardise}
+data_rounded <- data.frame(round(scale(data_raw),2))
+data <- data.frame(scale(data_raw))
+
+kable(head(t(head(t(data_rounded)))),
+      caption = "Head of the standardised dataset (Z-scores)",
+      align = "c")
+```
+
+### 1.2 Multicollinearity Assessment
+
+In the modern Premier League, variables rarely move in isolation; a club’s wage bill, squad value, and points tally usually move in tandem. I used a **Correlation Matrix** (Figure 1) to quantify these relationships.
+
+```{r correlation, fig.cap = "Heatmap of the Correlation Matrix"}
+cor_matrix <- cor(data) 
+
+corrplot(cor_matrix, 
+         method = "color",
+         type = "upper",
+         tl.col = "black",
+         tl.srt = 45,
+         addCoef.col = "black",
+         diag = FALSE,
+         order = "hclust")
+```
+
+The heatmap reveals overwhelmingly positive correlations (darker shades of blue) across several key domains:
+
+\begin{itemize}
+  \item \textbf{The Performance-Finance Link:} \textbf{Average Points} and \textbf{Expected Goal Difference} show a near-perfect correlation ($r = 0.94$). This proves that on-pitch performance is almost entirely synchronised with underlying quality; there is very little "statistical noise" or luck separating how a team plays from the points they earn.
+  \item \textbf{Financial Scale:} A dense block of variables, including Squad Value, Wages, and Total Revenue, shows correlations consistently exceeding $r = 0.85$. This confirms that these metrics are highly redundant: if you know a club’s revenue, you can predict their wage bill and squad market value with extreme accuracy.
+  \item \textbf{The "Closed Loop" of Dominance:} A nearly perfect link exists between financial input and sporting output (e.g. Wage Bill and Average Points exceed $r > 0.9$). This demonstrates that the Premier League is a "pay-to-play" environment where financial scale is the primary gatekeeper of success.
+\end{itemize}
+
+This pervasive pattern of high multicollinearity confirms that the 11 variables are heavily overlapping. This provides the ultimate justification for using **Principal Component Analysis (PCA)** to boil the data down into its three most essential, uncorrelated pillars.
+
+## 2. Validation of Dimensionality and Structure (PCA Findings)
+
+PCA was employed to simplify the 11 variables into a concise set of three underlying factors that define the Premier League’s competitive structure.
+
+### 2.1 Component Selection: The $k = 3$ Decision
+
+To determine the optimal number of factors, the Eigenvalues and the cumulative variance were both examined. While the Scree Plot (Figure 2) displays a sharp 'elbow' after the first component, reflecting the sheer dominance of Financial Scale, relying solely on this visual would discard critical information regarding stability and infrastructure. Therefore, the **90% Rule-of-Thumb** was applied. Since PC1 and PC2 combined explain only 87.47% of the variance, retaining the third component (PC3) was essential to cross the **90% threshold** (reaching 92.30%). This ensures the model accounts for the nuanced structural drivers that the primary financial dimension obscures.
+
+```{r pca}
+data_pca <- prcomp(data)
+
+eigenvalues <- data_pca$sdev^2
+variance_explained <- summary(data_pca)$importance[2, ]
+cumulative_variance <- summary(data_pca)$importance[3, ]
+
+var_table <- data.frame(
+  round(eigenvalues, 2),
+  round(variance_explained * 100, 2),
+  round(cumulative_variance * 100, 2))
+
+kable(var_table[1:5,],
+    col.names = c("Eigenvalue","Variance Explained (%)","Cumulative Variance (%)"),
+    caption = "PCA Component Variance and Eigenvalues",
+    align = "c")
+```
+
+\newpage
+
+```{r Scree plot, fig.cap = "Variance Explained by each Principal Component", warning = FALSE, message = FALSE}
+fviz_eig(data_pca, addlabels = TRUE)
+```
+
+### 2.2 Interpretation of Principal Components
+
+To make these factors easy to interpret, I applied a "Varimax rotation", a mathematical sharpening tool that ensures each variable clearly belongs to one specific factor. This allowed us to name the four dimensions:
+
+```{r rotated loadings}
+data_pca_rot <- principal(cor_matrix, nfactors = 3, rotate = "varimax")
+
+loadings_df <- as.data.frame(unclass(data_pca_rot$loadings))
+loadings_df <- round(loadings_df, 2)
+
+kable(loadings_df,
+    col.names = c("PC1: Scale and Finance", "PC2: Competitive Entrenchment", "PC3: Physical and Continental Pedigree"),
+    caption = "Rotated Component Loadings for 11 Variables.",
+    booktabs = TRUE,
+    align = "c",
+    escape = FALSE)
+```
+
+\begin{itemize}
+  \item \textbf{PC1: Absolute Scale and Finance (The "Ceiling"):} Defined by \textbf{Commercial Revenue (0.85)} and \textbf{Instagram Followers (0.89)}. This factor sets the competitive ceiling—the financial and global brand gravity that separates the "Global Giants" from domestic participants.
+  \item \textbf{PC2: Competitive Entrenchment (The "Stability"):} Overwhelmingly defined by \textbf{Premier League Tenure (0.87)} and high \textbf{Points/xGD}. This factor distinguishes the "Established Vanguard" from transient or "Yo-Yo" clubs.
+  \item \textbf{PC3: Physical and Continental Pedigree:} Driven by \textbf{Stadium Capacity (0.85)} and \textbf{UEFA History}. This dimension captures the physical infrastructure and historical prestige of a club.
+\end{itemize}
+
+### 2.3 Visualising the Competitive Landscape (The Biplot)
+
+The relationship between the clubs and the newly defined factors is visually mapped using a **Biplot** (Figure 3). This chart displays the clubs’ coordinates based on their scores for **Dim1 (Absolute Scale)** and **Dim2 (Competitive Entrenchment)**.
+
+```{r biplot, fig.cap = "Competitive Landscape Biplot of Premier League Clubs", warning = FALSE, message = FALSE}
+fviz_pca_biplot(data_pca,
+    geom.ind = "text",
+    col.ind = "steelblue",
+    repel = TRUE,
+    pointsize = 1.5,
+    geom.var = c("arrow", "text"),
+    col.var = "grey75",
+    alpha.var = 0.5,
+    text.size = 4)
+```
+
+**Key Spatial Observations:**
+\begin{itemize}
+  \item \textbf{The Horizontal Axis (PC1 - 80.7\%):} This represents a club’s financial and brand "gravity." The further to the left a club sits, the higher their revenue, global following, and squad value.
+  \item \textbf{The Vertical Axis (PC2 - 6.8\%):} This represents stability. Clubs positioned higher on this axis possess greater longevity and consistent sporting output.
+  \item \textbf{The Elite Chasm:} The "Big Six" are pulled to the extreme left. Interestingly, \textbf{Manchester United} shows a distinct vertical deviation from the elite group; while their scale (PC1) remains massive, their position is driven heavily by an outlier status in \textbf{Instagram Followers}, pulling them further down the axis compared to the sporting-led positions of Manchester City and Arsenal.
+  \item \textbf{The Challenger Vanguard:} A group of "Vanguard" clubs, led by \textbf{Brighton, Newcastle, and Aston Villa}, are clearly pulled upward and toward the center. This group has successfully distanced itself from the "Yo-Yo" cluster in the bottom-right (containing \textbf{West Brom, Norwich, and Luton}), who currently lack both the financial scale and the tenure to move toward the center.
+\end{itemize}
+
+## 3. Determination of Competitive Tiers (Clustering Validation)
+
+This stage identifies the optimal number of competitive "groups" ($k$) within the Premier League. To ensure these groups are meaningful, clubs are clustered based on their scores across the three **Master Factors** (PC1–PC3) rather than raw, noisy stats.
+
+### 3.1 Hierarchical Clustering: The "Family Tree"
+
+**Hierarchical Clustering** was employed to visualise the natural "tribes" within the league. The resulting **Dendrogram** (Figure 4) functions as a family tree of competitive profiles; clubs connected by lower "branches" share a more similar statistical DNA.
+
+```{r dendrogram, fig.cap = "Dendrogram of Hierarchical Clustering on Three Principal Components", warning = FALSE, message = FALSE}
+pc_scores <- data_pca$x[, 1:3]
+
+distance_matrix <- dist(pc_scores, method = "euclidean")
+hc_result <- hclust(distance_matrix, method = "ward.D2")
+
+fviz_dend(hc_result,
+          k = 4,
+          cex = 0.55, 
+          k_colors = c("#E41A1C", "#984EA3", "#4DAF4A", "#377EB8"),
+          rect = TRUE,
+          horiz = TRUE) +
+  theme(plot.margin = margin(0, 2, 0, 0, "cm"))
+```
+
+The dendrogram reveals a highly structured league. The primary split separates the global elite from the rest of the competition. Critically, the branches now show a clear secondary division: the **"Vanguard"** (Newcastle, Aston Villa, Brighton, etc.) forms a distinct sub-branch, while the bottom-tier clubs, including West Brom, Ipswich and Norwich, are grouped logically with other "Yo-Yo" sides like Watford and Luton. This structure suggests that a four-tier model captures the nuances of the league's competitive tiers with high precision.
+
+### 3.2 The Elbow Criterion: Finding the "Sweet Spot"
+
+To move from visual estimation to mathematical certainty, the **Elbow Method** was used. This calculates the "Within-Cluster Sum of Squares" (WSS), essentially a measure of how "tight" and cohesive the groups are.
+
+```{r elbowkplot, fig.cap = "Elbow Plot for the Optimal Number of Clusters"}
+fviz_nbclust(pc_scores, 
+             kmeans,
+             method = "wss",
+             k.max = 10)
+```
+
+As shown in the plot, a clear “elbow” appears at $k = 4$. While $k = 5$ is statistically plausible and provides a slightly "tighter" model, I have chosen $k = 4$ based on the **Principle of Parsimony**. This principle suggests that the simplest explanation that fits the data is usually the best; a four-tier structure provides the most practical and clear framework for defining the league’s primary hierarchy without over-complicating the narrative.
+
+**Observation on Higher Resolutions ($k=5$ to $k=8$)**
+
+While $k=4$ is the most robust baseline, the **Dendrogram** reveals a telling sequence of "power splits" as the resolution increases:
+\begin{itemize}
+  \item \textbf{The "Super-Elite" ($k=5$):} The first major refinement splits the Big Six, isolating \textbf{Manchester City and Liverpool} into their own tier—a mathematical nod to the "90-point era" they have defined.
+  \item \textbf{The Brand Outlier ($k=6$):} At six clusters, \textbf{Manchester United} splits from the remaining giants. This likely reflects their unique statistical profile: elite global reach (PC1) decoupled from recent sporting stability (PC2).
+  \item \textbf{The Vanguard Stratification ($k=7$):} Interestingly, the next split occurs within Tier 2, separating \textbf{Newcastle, Aston Villa, and Brighton} from West Ham and Everton. This identifies the "Inner Vanguard"—the clubs currently closest to the elite center.
+  \item \textbf{Bottom-Tier and Spurs Splits ($k=8+$):} Further splits eventually separate the "Stable Middle" from the "Extreme Yo-Yos" (West Brom, Luton, Norwich) and isolate \textbf{Tottenham Hotspur} from the remaining London giants.
+\end{itemize}
+
+Despite these nuances, $k=4$ remains the optimal choice for this report, as it most cleanly identifies the **"Financial Chasm"** and the **"Vanguard"** challengers.
+
+## 4. Identification and Analysis of Competitive Tiers
+
+Using our validated $k = 4$, the final **K-Means Clustering** algorithm was applied. This officially assigns every club into one of four distinct tiers based on their scores across the three Master Factors: Absolute Scale (PC1), Competitive Stability (PC2), and Pedigree (PC3).
+
+### 4.1 The Competitive Profile of Each Tier
+
+To understand the "character" of these tiers, the average scores across our four Master Factors were examined. Figure 6 visualises these profiles, acting as a "DNA strip" for each group.
+
+*Note: These bars represent deviations from the league average (0.0). A bar pointing away from the center indicates a tier is significantly higher or lower than the rest of the league in that specific dimension.*
+
+\newpage
+
+```{r kmeans setup}
+set.seed(42)
+kmeans <- kmeans(pc_scores, centers = 4, nstart = 25)
+
+cluster_data <- as.data.frame(pc_scores) %>%
+  rownames_to_column(var = "Team") %>%
+  as_tibble() %>%
+  mutate(ClusterID = as.factor(kmeans$cluster))
+
+cluster_profiles <- cluster_data %>%
+  group_by(ClusterID) %>%
+  summarise(across(starts_with("PC"), mean))
+
+id_elite <- cluster_profiles %>% arrange(PC1) %>% slice(1) %>% pull(ClusterID)
+
+id_bottom <- cluster_profiles %>% arrange(desc(PC1)) %>% slice(1) %>% pull(ClusterID)
+
+remaining_clusters <- cluster_profiles %>% 
+  filter(!ClusterID %in% c(id_elite, id_bottom))
+
+id_vanguards <- remaining_clusters %>% arrange(desc(PC2)) %>% slice(1) %>% pull(ClusterID)
+
+id_middle <- remaining_clusters %>% 
+  filter(ClusterID != id_vanguards) %>% 
+  pull(ClusterID)
+
+tier_labels <- tibble(
+  ClusterID = c(id_elite, id_vanguards, id_middle, id_bottom),
+  Tier_Name = c("Tier 1: The Elites", 
+                "Tier 2: The Vanguards", 
+                "Tier 3: The Middle", 
+                "Tier 4: The Bottom"))
+
+final_data <- cluster_data %>%
+  left_join(tier_labels, by = "ClusterID")
+
+table_output <- final_data %>%
+  group_by(Tier_Name) %>%
+  summarise(across(starts_with("PC"), mean)) %>%
+  arrange(Tier_Name)
+
+plot_data <- table_output %>%
+  pivot_longer(cols = starts_with("PC"), names_to = "Factor", values_to = "Mean_Score") %>%
+  mutate(Factor = factor(Factor, levels = c("PC1", "PC2", "PC3", "PC4")))
+```
+
+```{r bar plot, fig.cap = "Competitive Profile of Each Tier"}
+ggplot(plot_data, aes(x = fct_rev(Tier_Name), y = Mean_Score, fill = Factor)) + 
+  geom_bar(stat = "identity", position = "dodge", width = 0.7) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
+  coord_flip() +
+  scale_fill_brewer(palette = "Set1", 
+                    labels = c("PC1: Scale", "PC2: Tenure", "PC3: Pedigree")) +
+  labs(x = "",
+       y = "Mean Score (>0 is above average, <0 is below average)",
+       fill = "Factors") +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        panel.grid.major.y = element_blank())
+```
+
+The bar chart (Figure 6) reveals the distinct identities of each group. While **Tier 1 (The Elites)** shows the most extreme financial scale (PC1), their performance stability (PC2) is more varied than one might expect, reflecting the high-pressure, high-volatility nature of competing for titles and the 'Manchester United effect' of high spend but fluctuating results."
+
+**Tier 2 (The Vanguards)** emerges as the efficiency leader of the league. Their position at the positive pole of PC2 indicates they are the most 'over-indexed' for stability—they maximize their sporting output relative to their financial footprint. In contrast, **Tier 3 and Tier 4** show progressively lower scores across all dimensions, with Tier 4 defined by a near-total lack of the financial or historical 'Scale' required to break out of the bottom quartile.
+
+### Spatial Validation (The Colored Biplot)
+
+By re-plotting our “Map of the Premier League” and coloring the clubs by their assigned tier, we can visualise the physical **“Chasm”** in the league’s structure.
+
+\newpage
+
+```{r finalbiplot, warning = FALSE, message = FALSE, fig.cap = "Competitive Landscape Biplot with Clubs Colored by Final Competitive Tier (k=4)"}
+final_data <- final_data %>%
+  mutate(Tier_Name = factor(Tier_Name, levels = c("Tier 1: The Elites", 
+                                                 "Tier 2: The Vanguards", 
+                                                 "Tier 3: The Middle", 
+                                                 "Tier 4: The Bottom")))
+
+fviz_pca_biplot(data_pca,
+    geom.ind = "text",
+    col.ind = final_data$Tier_Name,
+    repel = TRUE,
+    pointsize = 2,
+    geom.var = c("arrow", "text"),
+    col.var = "grey75",
+    alpha.var = 0.5,
+    legend.title = "Competitive Tier") +
+  scale_color_manual(values = c("#E41A1C", "#377EB8", "#4DAF4A", "#984EA3"), 
+                     labels = c("Tier 1", "Tier 2", "Tier 3", "Tier 4")) +
+  theme(legend.position = "bottom", 
+        legend.text = element_text(size = 9)) +
+  guides(color = guide_legend(override.aes = list(label = "*", size = 7)))
+
+```
+
+As the map illustrates, the **Tier 1 clubs (The Big Six)** are completely isolated on the far left. **Tier 2 (The Vanguard)** occupies the "upper-center" ground, pulling away from the general population toward the elite. **Tier 3 (The Middle)** clusters in the center, while **Tier 4** occupies the high-risk “bottom-right” quadrant. This confirms a strictly stratified hierarchy where a club's movement between tiers is a result of long-term structural shifts rather than transient form.
+
+### 4.3 Final Tier Membership
+
+The following membership reflects the structure of the league over the five-season window:
+\begin{itemize}
+  \item \textbf{Tier 1 (The Elite):} Arsenal, Chelsea, Liverpool, Manchester City, Manchester United, Tottenham Hotspur.
+  \item \textbf{Tier 2 (The Vanguard):} Aston Villa, Newcastle United, Brighton, West Ham United, Everton.
+  \item \textbf{Tier 3 (The Middle):} Crystal Palace, Wolves, Brentford, Fulham, Bournemouth, Nottingham Forest, Leicester City, Leeds United, Southampton, Burnley.
+  \item \textbf{Tier 4 (The Bottom):} West Bromwich Albion, Norwich City, Sheffield United, Watford, Luton Town, Ipswich Town.
+\end{itemize}
+
+## 5. Discussion: The Mechanics of Stratification
+
+This section interprets the structural findings to address the central question of this report: how "closed" is the Big Six, and what are the specific mechanics that prevent Tier 2 clubs from bridging the gap?
+
+### 5.1 The Brand-Performance Paradox: The Manchester United Case
+
+The most fascinating spatial discovery in the current model is the vertical isolation of **Manchester United**. While the other "Elite" members cluster relatively tightly on the left, United drifts significantly downward on the vertical axis (PC2: Stability/Tenure).
+
+This suggests that United’s "Elite" status is currently sustained almost entirely by **PC1 (Absolute Scale and Brand)**, driven by their massive commercial revenue and global Instagram following, rather than the high-efficiency sporting stability seen in **Manchester City or Liverpool**. United serves as the primary evidence that a "Financial Moat" can protect a club's status even when sporting output begins to fluctuate toward mid-table norms.
+
+### 5.2 The "Financial Chasm" and the Commercial Moat
+
+The primary barrier to entry remains the extreme disparity in global brand scale. The transition from Tier 2 to Tier 1 is not a gradual slope but a statistical "No-Man’s Land."
+
+```{r  tier 1 vs 2 table}
+gap_analysis <- data_raw %>%
+  rownames_to_column(var = "Team") %>%
+  left_join(final_data %>% select(Team, Tier_Name), by = "Team")
+
+financial_comparison <- gap_analysis %>%
+  filter(Tier_Name %in% c("Tier 1: The Elites", "Tier 2: The Vanguards")) %>%
+  group_by(Tier_Name) %>%
+  summarise(
+    `Avg. Wage Bill` = mean(Wage_Bill, na.rm = TRUE),
+    `Avg. Total Revenue` = mean(Tot_Rev, na.rm = TRUE),
+    `Avg. Commercial Rev` = mean(Com_Rev, na.rm = TRUE),
+    `Avg. Squad Value` = mean(Sqd_Mkt_Val, na.rm = TRUE),
+    `Avg. Instagram` = mean(Ig_Fol, na.rm = TRUE)
+  ) %>%
+  mutate(Tier = gsub(":.*", "", Tier_Name)) %>%
+  select(Tier, everything(), -Tier_Name)
+
+kable(financial_comparison, 
+      digits = 1,
+      caption = "Mean Financial and Market Scale Metrics: Tier 1 vs 2",
+      booktabs = TRUE)
+```
+
+The data confirms that while Vanguard clubs can compete in terms of squad value or occasional points tallies, they lack the **Global Brand Footprint (PC1)** required to sustain elite spending. A Tier 2 club is essentially playing a domestic game, while Tier 1 clubs are playing a global one.
+
+### 5.2 Dimensional Distance and Elite Homogeneity
+
+To measure this gap precisely, the **Mapping Distance** (mathematically known as Euclidean distance) of each club was calculated from the "Elite Center"—the average score of the Big Six. This reveals how remarkably consistent the Big Six are.
+
+### 5.3 The Vanguard: Stability as a Launchpad
+
+The model naturally identifies a "Vanguard" class (Aston Villa, Newcastle, Brighton, West Ham, and Everton) that has successfully separated itself from the Tier 3 "Middle".
+\begin{itemize}
+  \item \textbf{Aston Villa and Newcastle:} These clubs are utilising a "Dual-Track" strategy—leveraging significant historical infrastructure (PC3) while aggressively scaling their financial inputs to move horizontally toward the Elite.
+  \item \textbf{Brighton \& Hove Albion:} Brighton represents the "Efficiency" model. They occupy the highest vertical position in the Vanguard, suggesting that their status is built on \textbf{Competitive Stability (PC2)}. They have optimised their "Tenure" and "xGD" to such an extent that they sit closer to the Elite on the Biplot than clubs with significantly higher revenues.
+\end{itemize}
+
+### 5.4 The "Yo-Yo" Gravity of Tier 4
+
+**Tier 4 (The Bottom)**, including West brom, Norwich, and Sheffield United suffers from a lack of "Competitive Entrenchment" (PC2). Without the foundation of long-term Premier League tenure, these clubs cannot accumulate the commercial revenue necessary to build a "moat," leaving them perpetually vulnerable to the "gravity" of the Championship.
+
+## 6. The Challenger Audit: Quantifying the Glass Ceiling
+
+While clustering identifies the competitive groups, the **Euclidean Distance Audit** quantifies the exact mathematical effort required for a Tier 2 club to "break" the Big Six.
+
+### 6.1 The Stability of the Elite Core
+
+To establish a baseline, the distance of each "Big Six" club from the **Elite Centroid** (the group average) was calculated. This reveals a defined elite structure where all six member clubs are contained within a 2.0-unit radius of the group average, creating a distinct statistical island compared to the rest of the league.
+
+```{r elite distances}
+final_data <- final_data %>%
+  column_to_rownames(var = "Team")
+pc_cols <- grep("PC|Dim", names(final_data), value = TRUE)[1:3]
+elite_centroid <- colMeans(final_data[final_data$ClusterID == 2, pc_cols])
+
+calc_dist <- function(row) {
+  sqrt(sum((row - elite_centroid)^2))}
+
+final_data$`Distance To Elite` <- apply(final_data[, 1:3], 1, calc_dist)
+
+tier2_rankings <- final_data %>%
+  filter(ClusterID == 4) %>%
+  select(`Distance To Elite`) %>%
+  arrange(`Distance To Elite`)
+
+tier1_rankings <- final_data %>%
+  filter(ClusterID == 2) %>%
+  select(`Distance To Elite`) %>%
+  arrange(`Distance To Elite`)
+
+kable(round(tier1_rankings, 2),
+      col.names = c("Team", "Distance To Mean"),
+      caption = "Internal Cohesion of the Elite Tier")
+```
+
+### 6.2 Ranking the Vanguard: The "Tier 1.5" Leaderboard
+
+The distances were measured from the Elite Centroid to the top challengers in Tier 2. The results show a significant "Structural Chasm". **Aston Villa (3.90)** and **Newcastle (4.04)** are almost mathematically twice as far from the Elite center as the most distant Elite club (Tottenham, 1.99) is from its own group.
+
+```{r tier 2 distances}
+kable(head(round(tier2_rankings, 2)),
+      col.names = c("Team", "Distance To Elite"),
+      caption = "Distance of Challengers to the Elite Cluster")
+```
+
+### 6.3 Diagnostic Audit: Why the Gap Persists
+
+By decomposing these distances into our three Master Factors, we can identify the specific "structural wall" each club is hitting.
+
+```{r tier 2 to elite}
+vanguard_list <- c("Aston Villa", "Newcastle", "Brighton", "West Ham", "Everton")
+audit_data <- final_data[rownames(final_data) %in% vanguard_list, ]
+
+diff_matrix <- as.matrix(audit_data[, pc_cols]) - matrix(elite_centroid, 
+                                                            nrow = nrow(audit_data), 
+                                                            ncol = 3, 
+                                                            byrow = TRUE)
+diff_sq <- diff_matrix^2
+
+total_sq_dist <- rowSums(diff_sq)
+gap_pct_matrix <- (diff_sq / total_sq_dist) * 100
+
+gap_analysis_df <- data.frame(
+  PC1_Scale_Gap = round(gap_pct_matrix[, 1], 2),
+  PC2_Stability_Gap = round(gap_pct_matrix[, 2], 2),
+  PC3_Pedigree_Gap = round(gap_pct_matrix[, 3], 2)
+)
+
+kable(gap_analysis_df,
+      col.names = c("Team", "PC1: Scale Gap", "PC2: Stability Gap", "PC3: Pedigree Gap"),
+      caption = "Percentage Contribution of Each Factor to the Elite Gap")
+```
+
+**Key Audit Findings:**
+\begin{itemize}
+  \item \textbf{The Commercial Moat (PC1):} For every major challenger, \textbf{Absolute Scale (PC1)}, encompassing commercial revenue and global brand reach, is responsible for over 80\% of their distance from the elite. This confirms that the Big Six is not a sporting monopoly, but a financial and global brand monopoly.
+  \item \textbf{The Newcastle/Villa Paradox:} Both clubs show very low \textbf{Pedigree Gaps (<5\%)}, meaning their historical status and infrastructure are already at an elite level. Their only remaining barrier is the horizontal "Scale" axis.
+  \item \textbf{The Brighton Efficiency Limit:} Brighton has almost \textbf{zero Pedigree Gap (0.08\%)} relative to the elite, yet they suffer from a high \textbf{Stability Gap (17.81\%)}. This suggests that while they are historically "pedigreed" enough to belong, their lack of long-term elite tenure (PC2) and global scale (PC1) creates a combined structural barrier that scouting efficiency alone cannot solve.
+  \item \textbf{West Ham’s Infrastructure Wall:} Unlike the others, West Ham faces a notable \textbf{Pedigree/Infrastructure Gap} (18.86\%). While they have scaled their finances, their path to the elite is uniquely hindered by the physical and historical variables measured in PC3.
+  \item \textbf{Everton’s Scale Barrier:} Everton possesses the highest \textbf{Scale Gap (88.82\%)} in the audit. Despite their high stability and pedigree (lower gaps in PC2 and PC3), their inability to convert history and tenure into elite-level commercial revenue keeps them statistically tethered to Tier 2.
+\end{itemize}
+
+\newpage
+
+# Conclusion: The Structural Calculus of Success
+
+The objective of this report was to move beyond the subjective “Big Six” narrative and apply a multi-dimensional statistical framework to the hierarchy of the Premier League. Through Principal Component Analysis (PCA) and K-Means Clustering, this study has successfully quantified the structural barriers that define modern English football.
+
+## Synthesis of Findings
+
+The primary finding confirms that the “Big Six” is not merely a media construct, but a statistically fortified elite. The analysis revealed a significant **1.91-unit Euclidean chasm** between the most distant elite club (Tottenham) and the strongest challenger (Aston Villa). This gap is primarily driven by a **“Commercial Moat” (PC1)**—a self-sustaining cycle where global brand reach and non-matchday revenue provide a financial floor that short-term sporting failure cannot easily collapse.
+
+The model naturally identified the emergence of a **“Vanguard” (Tier 2)**. Clubs such as **Aston Villa, Newcastle, Brighton, West Ham, and Everton** have effectively separated themselves from the "Stable Middle". This group represents a distinct competitive tier that sits at the threshold of the elite, defined by high stability and historical pedigree.
+
+## The Manchester United Paradox and Structural Weight
+
+A notable finding in the final model is the vertical isolation of Manchester United. Despite sporting volatility, United’s massive scores in **Absolute Scale (PC1)** provide enough “structural weight” to keep them firmly within the Elite cluster. This reinforces the theory that the Premier League hierarchy is built on “slow-moving” variables; global brand power acts as a safety net, making decline a multi-year process regardless of on-pitch results.
+
+## Model Limitations
+
+While the PCA-K-Means approach provides a rigorous objective mapping, certain limitations remain:
+\begin{itemize}
+  \item \textbf{Smoothing of Volatility:} By using a five-year aggregate, the model "smoothes" rapid spikes or drops in form. While excellent for identifying long-term power, it can mask "Black Swan" events, such as Leicester City’s Premier League title or Newcastle United’s sudden change in ownership.
+  \item \textbf{Variable Correlation:} The model relies on the high correlation between factors like “Commercial Revenue” and “Instagram Followers”. While effective for clustering, it assumes these variables will continue to grow in tandem in a shifting digital landscape.
+\end{itemize}
+
+## Opportunities for Further Analysis
+
+The findings of this report provide a foundation for more granular temporal studies. Future analysis should consider:
+
+\begin{itemize}
+  \item \textbf{Temporal Momentum Studies:} Re-running this methodology on a 24-month “Rolling Window” would allow for a Recency Bias Analysis. This would highlight whether the \textbf{Vanguard} is currently accelerating toward the elite or merely stagnating at the "glass ceiling".
+  \item \textbf{Weighted-Decay Models:} Applying a “Time-Decay” factor—where recent seasons are weighted more heavily—would offer a more accurate “Predictive Hierarchy” to better capture the rapid rise of clubs like \textbf{Newcastle} or \textbf{Brighton}.
+\end{itemize}
+
+## Final Outlook
+
+In conclusion, while the Premier League remains competitive on a match-to-match basis, it is structurally stratified. The **Big Six** remain isolated on a high plateau, protected by a decade of commercial accumulation. However, the identification of a distinct **Vanguard** proves that the hierarchy is not static. For the first time in the modern era, a “Base Camp” has been established at the foot of the elite mountain, providing a mathematical blueprint for how clubs might eventually bridge the structural chasm.
+
+\newpage
+
+\section*{References}
+\markboth{References}{References}
